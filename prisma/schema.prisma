@@ -1,0 +1,63 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id           String        @id
+  email        String        @unique
+  credits      Int           @default(100)
+  plan         Plan          @default(FREE)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  generations  Generation[]
+  subscription Subscription?
+}
+
+model Generation {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  modelId   String
+  prompt    String
+  outputUrl String?
+  credits   Int
+  status    Status   @default(PENDING)
+  metadata  Json?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Subscription {
+  id               String   @id @default(cuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id])
+  stripeCustomerId String   @unique
+  stripePriceId    String
+  stripeSubId      String   @unique
+  plan             Plan
+  currentPeriodEnd DateTime
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+enum Plan {
+  FREE
+  STARTER
+  PRO
+  STUDIO
+}
+
+enum Status {
+  PENDING
+  PROCESSING
+  DONE
+  FAILED
+}
