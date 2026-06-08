@@ -16,15 +16,11 @@ export async function deductCredits(userId: string, modelId: string): Promise<vo
   const cost = MODEL_CREDITS[modelId];
   if (!cost) throw new Error(`Unknown model: ${modelId}`);
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  await prisma.$transaction(async (tx: any) => {
-    const user = await tx.user.findUniqueOrThrow({ where: { id: userId } });
-    if (user.credits < cost) throw new Error("Insufficient credits");
-    await tx.user.update({
-      where: { id: userId },
-      data: { credits: { decrement: cost } },
-    });
+  const updated = await prisma.user.updateMany({
+    where: { id: userId, credits: { gte: cost } },
+    data: { credits: { decrement: cost } },
   });
+  if (updated.count === 0) throw new Error("Insufficient credits");
 }
 
 export async function addCredits(userId: string, amount: number): Promise<void> {

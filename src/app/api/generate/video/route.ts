@@ -24,11 +24,8 @@ export async function POST(req: NextRequest) {
   const model = VIDEO_MODELS[modelId];
   if (!model) return NextResponse.json({ error: "Unknown model" }, { status: 400 });
 
-  await prisma.user.upsert({
-    where: { id: userId },
-    create: { id: userId, email: "", credits: 100 },
-    update: {},
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   try {
     await deductCredits(userId, modelId);

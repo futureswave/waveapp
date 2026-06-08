@@ -26,11 +26,8 @@ export async function POST(req: NextRequest) {
   }
 
   // Ensure user exists in DB
-  await prisma.user.upsert({
-    where: { id: userId },
-    create: { id: userId, email: "", credits: 100 },
-    update: {},
-  });
+  const user = await prisma.user.findUnique({ where: { id: userId } });
+  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
 
   // Deduct credits (throws if insufficient)
   try {
