@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import { CREDITS_REFRESH_EVENT } from "@/lib/credits-events";
 
 const NAV_ITEMS = [
   { label: "Explore", href: "/explore" },
@@ -26,10 +27,18 @@ function CreditBadge() {
 
   useEffect(() => {
     if (!isSignedIn) return;
-    fetch("/api/user/credits")
-      .then((r) => r.json())
-      .then((d) => setCredits(d.credits))
-      .catch(() => {});
+    const load = () =>
+      fetch("/api/user/credits")
+        .then((r) => r.json())
+        .then((d) => typeof d.credits === "number" && setCredits(d.credits))
+        .catch(() => {});
+    load();
+    window.addEventListener(CREDITS_REFRESH_EVENT, load);
+    window.addEventListener("focus", load);
+    return () => {
+      window.removeEventListener(CREDITS_REFRESH_EVENT, load);
+      window.removeEventListener("focus", load);
+    };
   }, [isSignedIn]);
 
   if (!isSignedIn || credits === null) return null;

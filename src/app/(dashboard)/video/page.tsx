@@ -1,75 +1,35 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { Suspense, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { VIDEO_MODELS } from "@/lib/models";
+import { useGenerationJob } from "@/hooks/useGenerationJob";
+import { getMotionPreset, motionPromptPrefix } from "@/lib/motion";
 import { cn } from "@/lib/utils";
 
-const VIDEO_MODELS = [
-  { id: "kling-2.1-5s", label: "Kling 2.1", badge: "Kuaishou", credits: 20 },
-  { id: "veo-3.1-fast", label: "Veo 3.1 Fast", badge: "Google", credits: 25 },
-  { id: "hailuo-02", label: "Hailuo 02", badge: "MiniMax", credits: 28 },
-  { id: "sora-2", label: "Sora 2", badge: "OpenAI", credits: 40 },
-  { id: "seedance-1-pro", label: "Seedance 1 Pro", badge: "ByteDance", credits: 60 },
-];
-
-type JobStatus = "idle" | "submitting" | "processing" | "done" | "failed";
-
 export default function VideoPage() {
-  const [model, setModel] = useState(VIDEO_MODELS[0].id);
-  const [prompt, setPrompt] = useState("");
-  const [status, setStatus] = useState<JobStatus>("idle");
-  const [generationId, setGenerationId] = useState<string | null>(null);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  return (
+    <Suspense>
+      <VideoPageInner />
+    </Suspense>
+  );
+}
 
-  useEffect(() => {
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, []);
+function VideoPageInner() {
+  const searchParams = useSearchParams();
+  const motionPreset = getMotionPreset(searchParams.get("motion"));
+  const [model, setModel] = useState(VIDEO_MODELS[0].key);
+  const [prompt, setPrompt] = useState(motionPreset ? motionPromptPrefix(motionPreset) : "");
+  const { status, outputUrl, error, start } = useGenerationJob();
 
-  async function pollStatus(id: string) {
-    pollRef.current = setInterval(async () => {
-      const res = await fetch(`/api/generate/status/${id}`);
-      const data = await res.json();
-      if (data.status === "DONE") {
-        clearInterval(pollRef.current!);
-        setVideoUrl(data.outputUrl);
-        setStatus("done");
-      } else if (data.status === "FAILED") {
-        clearInterval(pollRef.current!);
-        setError("Generation failed.");
-        setStatus("failed");
-      }
-    }, 5000);
-  }
-
-  async function handleGenerate() {
-    if (!prompt.trim()) return;
-    setStatus("submitting");
-    setError(null);
-    setVideoUrl(null);
-
-    try {
-      const res = await fetch("/api/generate/video", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ modelId: model, prompt }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setGenerationId(data.generationId);
-      setStatus("processing");
-      pollStatus(data.generationId);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Submission failed");
-      setStatus("failed");
-    }
-  }
-
-  const selectedModel = VIDEO_MODELS.find((m) => m.id === model)!;
+  const selectedModel = VIDEO_MODELS.find((m) => m.key === model)!;
   const isLoading = status === "submitting" || status === "processing";
+
+  function handleGenerate() {
+    if (!prompt.trim()) return;
+    start("/api/generate/video", { modelId: model, prompt });
+  }
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -80,22 +40,22 @@ export default function VideoPage() {
         <div className="flex flex-col gap-4">
           {/* Model selector */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-white/60">Model</label>
+            <span className="mb-2 block text-sm font-medium text-white/60">Model</span>
             <div className="flex flex-col gap-2">
               {VIDEO_MODELS.map((m) => (
                 <button
-                  key={m.id}
-                  onClick={() => setModel(m.id)}
+                  key={m.key}
+                  onClick={() => setModel(m.key)}
                   className={cn(
                     "flex items-center justify-between rounded-lg border px-4 py-3 text-left transition-colors",
-                    model === m.id
+                    model === m.key
                       ? "border-white bg-white/10 text-white"
                       : "border-white/10 text-white/50 hover:border-white/30 hover:text-white"
                   )}
                 >
                   <div>
                     <p className="font-medium">{m.label}</p>
-                    <p className="text-xs text-white/40">{m.badge}</p>
+                    <p className="text-xs text-white/40">{m.provider}</p>
                   </div>
                   <span className="text-sm text-white/40">{m.credits} cr</span>
                 </button>
@@ -105,8 +65,11 @@ export default function VideoPage() {
 
           {/* Prompt */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-white/60">Prompt</label>
+            <label htmlFor="video-prompt" className="mb-2 block text-sm font-medium text-white/60">
+              Prompt
+            </label>
             <textarea
+              id="video-prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe the video you want to generate..."
@@ -139,20 +102,20 @@ export default function VideoPage() {
               <p className="mt-1 text-xs text-white/20">This may take a few minutes</p>
             </div>
           )}
-          {status === "submitting" && (
-            <p className="text-sm text-white/30">Submitting job...</p>
-          )}
-          {status === "done" && videoUrl && (
+          {status === "submitting" && <p className="text-sm text-white/30">Submitting job...</p>}
+          {status === "done" && outputUrl && (
             <div className="w-full overflow-hidden rounded-xl">
-              <video src={videoUrl} controls className="w-full" />
+              <video src={outputUrl} controls className="w-full" />
               <div className="p-3 text-right">
-                <a href={videoUrl} download target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" variant="outline">Download</Button>
+                <a href={`/api/download?url=${encodeURIComponent(outputUrl)}`}>
+                  <Button size="sm" variant="outline">
+                    Download
+                  </Button>
                 </a>
               </div>
             </div>
           )}
-          {status === "idle" && (
+          {(status === "idle" || status === "failed") && !outputUrl && (
             <p className="text-sm text-white/20">Your video will appear here</p>
           )}
         </div>

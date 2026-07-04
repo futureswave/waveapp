@@ -20,19 +20,30 @@ model User {
 }
 
 model Generation {
-  id        String   @id @default(cuid())
-  userId    String
-  user      User     @relation(fields: [userId], references: [id])
-  modelId   String
-  prompt    String
-  outputUrl String?
-  credits   Int
-  status    Status   @default(PENDING)
-  metadata  Json?
-  createdAt DateTime @default(now())
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  modelId           String
+  prompt            String
+  outputUrl         String?
+  credits           Int
+  status            Status   @default(PENDING)
+  providerRequestId String?  @unique
+  metadata          Json?
+  createdAt         DateTime @default(now())
 
   @@index([userId])
   @@index([status])
+}
+
+// Idempotency ledger for external webhook events (Stripe, fal, Clerk).
+// A row here means the event was already processed; duplicates are skipped.
+model ProcessedWebhookEvent {
+  id          String   @id
+  provider    String
+  processedAt DateTime @default(now())
+
+  @@index([provider])
 }
 
 model Subscription {

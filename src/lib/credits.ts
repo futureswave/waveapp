@@ -1,19 +1,13 @@
 import { prisma } from "./prisma";
+import { getModel } from "./models";
 
-export const MODEL_CREDITS: Record<string, number> = {
-  "imagen-4-fast": 3,
-  "ideogram-v3-turbo": 4,
-  "flux-kontext-max": 5,
-  "flux-dev": 6,
-  "kling-2.1-5s": 20,
-  "veo-3.1-fast": 25,
-  "hailuo-02": 28,
-  "sora-2": 40,
-  "seedance-1-pro": 60,
-};
+/** Credit cost for a model, or undefined if the model is unknown. */
+export function modelCredits(modelId: string): number | undefined {
+  return getModel(modelId)?.credits;
+}
 
 export async function deductCredits(userId: string, modelId: string): Promise<void> {
-  const cost = MODEL_CREDITS[modelId];
+  const cost = modelCredits(modelId);
   if (!cost) throw new Error(`Unknown model: ${modelId}`);
 
   const updated = await prisma.user.updateMany({

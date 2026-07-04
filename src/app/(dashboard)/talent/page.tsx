@@ -20,9 +20,13 @@ export default function TalentPage() {
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
       <div className="mb-8">
+        <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/10 px-3 py-1 text-xs font-medium text-amber-300">
+          <span>●</span> Coming soon — preview only
+        </div>
         <h1 className="text-3xl font-bold">Character Lock</h1>
         <p className="mt-2 text-white/40">
           Upload 2–8 reference photos to lock your character&apos;s identity across every generation.
+          This feature is not live yet — uploads are previewed locally and not saved.
         </p>
       </div>
 
@@ -87,12 +91,8 @@ export default function TalentPage() {
           )}
         </div>
 
-        <Button
-          size="lg"
-          disabled={files.length < 2 || !name.trim()}
-          className="mt-2"
-        >
-          Create character
+        <Button size="lg" disabled className="mt-2">
+          Create character (coming soon)
         </Button>
 
         {files.length > 0 && files.length < 2 && (

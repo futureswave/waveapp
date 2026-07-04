@@ -1,74 +1,36 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
-import { deductCredits, MODEL_CREDITS } from "@/lib/credits";
-
-const VIDEO_MODELS: Record<string, { falId: string; label: string; credits: number }> = {
-  "kling-2.1-5s": { falId: "fal-ai/kling-video/v2.1/standard/text-to-video", label: "Kling 2.1", credits: 20 },
-  "veo-3.1-fast": { falId: "fal-ai/veo3/fast", label: "Veo 3.1 Fast", credits: 25 },
-  "hailuo-02": { falId: "fal-ai/minimax/video-01", label: "Hailuo 02", credits: 28 },
-  "sora-2": { falId: "fal-ai/sora", label: "Sora 2", credits: 40 },
-  "seedance-1-pro": { falId: "fal-ai/bytedance/seedance-1-pro", label: "Seedance 1 Pro", credits: 60 },
-};
+import { ensureUser } from "@/lib/user";
+import { checkRateLimit } from "@/lib/ratelimit";
+import { videoGenerateSchema } from "@/lib/validation";
+import { submitGeneration } from "@/lib/generate";
+import { isModelKind } from "@/lib/models";
 
 export async function POST(req: NextRequest) {
   const { userId } = await auth();
   if (!userId) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { modelId, prompt, duration = 5 } = await req.json();
-
-  if (!modelId || !prompt) {
-    return NextResponse.json({ error: "modelId and prompt required" }, { status: 400 });
+  if (!(await checkRateLimit(`vid:${userId}`))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  const model = VIDEO_MODELS[modelId];
-  if (!model) return NextResponse.json({ error: "Unknown model" }, { status: 400 });
+  const parsed = videoGenerateSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) {
+    return NextResponse.json({ error: "Invalid request", details: parsed.error.flatten() }, { status: 400 });
+  }
+  const { modelId, prompt, duration } = parsed.data;
 
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) return NextResponse.json({ error: "User not found" }, { status: 404 });
-
-  try {
-    await deductCredits(userId, modelId);
-  } catch (err) {
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Credit error" },
-      { status: 402 }
-    );
+  if (!isModelKind(modelId, "video")) {
+    return NextResponse.json({ error: "Unknown video model" }, { status: 400 });
   }
 
-  const generation = await prisma.generation.create({
-    data: {
-      userId,
-      modelId,
-      prompt,
-      credits: MODEL_CREDITS[modelId] ?? model.credits,
-      status: "PENDING",
-      metadata: { duration },
-    },
-  });
-
-  // Submit async job to fal.ai queue
-  const { fal } = await import("@fal-ai/client");
-  fal.config({ credentials: process.env.FAL_KEY });
-
-  try {
-    const { request_id } = await fal.queue.submit(model.falId, {
-      input: { prompt, duration },
-      webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/fal`,
-    });
-
-    await prisma.generation.update({
-      where: { id: generation.id },
-      data: { status: "PROCESSING", metadata: { duration, falRequestId: request_id } },
-    });
-
-    return NextResponse.json({ generationId: generation.id, requestId: request_id });
-  } catch (err) {
-    await prisma.generation.update({ where: { id: generation.id }, data: { status: "FAILED" } });
-    await prisma.user.update({ where: { id: userId }, data: { credits: { increment: model.credits } } });
-    return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Submission failed" },
-      { status: 500 }
-    );
+  if (!(await ensureUser(userId))) {
+    return NextResponse.json({ error: "User not found" }, { status: 404 });
   }
+
+  const result = await submitGeneration(userId, modelId, prompt, { duration });
+  if (!result.ok) {
+    return NextResponse.json({ error: result.error }, { status: result.status });
+  }
+  return NextResponse.json({ generationId: result.generationId, requestId: result.requestId });
 }

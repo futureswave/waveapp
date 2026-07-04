@@ -2,6 +2,8 @@ import { auth } from "@clerk/nextjs/server";
 import { redirect } from "next/navigation";
 import Image from "next/image";
 import { prisma } from "@/lib/prisma";
+import { getModel } from "@/lib/models";
+import { LibraryAutoRefresh } from "@/components/library-auto-refresh";
 
 export default async function LibraryPage() {
   const { userId } = await auth();
@@ -13,8 +15,11 @@ export default async function LibraryPage() {
     take: 50,
   });
 
+  const hasProcessing = generations.some((g) => g.status === "PROCESSING" || g.status === "PENDING");
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
+      {hasProcessing && <LibraryAutoRefresh />}
       <div className="mb-8">
         <h1 className="text-3xl font-bold">Library</h1>
         <p className="mt-2 text-white/40">Your generation history</p>
@@ -29,45 +34,35 @@ export default async function LibraryPage() {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {generations.map((g: typeof generations[number]) => (
-            <div
-              key={g.id}
-              className="overflow-hidden rounded-xl border border-white/10 bg-white/5"
-            >
-              {g.outputUrl ? (
-                g.modelId.includes("kling") ||
-                g.modelId.includes("veo") ||
-                g.modelId.includes("sora") ||
-                g.modelId.includes("seedance") ||
-                g.modelId.includes("hailuo") ? (
-                  <video src={g.outputUrl} className="aspect-video w-full object-cover" />
+          {generations.map((g) => {
+            const isVideo = getModel(g.modelId)?.kind === "video";
+            return (
+              <div key={g.id} className="overflow-hidden rounded-xl border border-white/10 bg-white/5">
+                {g.outputUrl ? (
+                  isVideo ? (
+                    <video src={g.outputUrl} className="aspect-video w-full object-cover" />
+                  ) : (
+                    <div className="relative aspect-square w-full overflow-hidden">
+                      <Image src={g.outputUrl} alt={g.prompt} fill className="object-cover" unoptimized />
+                    </div>
+                  )
                 ) : (
-                  <div className="relative aspect-square w-full overflow-hidden">
-                    <Image
-                      src={g.outputUrl}
-                      alt={g.prompt}
-                      fill
-                      className="object-cover"
-                      unoptimized
-                    />
+                  <div className="flex aspect-square items-center justify-center bg-white/5">
+                    <span className="text-sm text-white/20">
+                      {g.status === "PROCESSING" || g.status === "PENDING" ? "Processing..." : g.status}
+                    </span>
                   </div>
-                )
-              ) : (
-                <div className="flex aspect-square items-center justify-center bg-white/5">
-                  <span className="text-sm text-white/20">
-                    {g.status === "PROCESSING" ? "Processing..." : g.status}
-                  </span>
-                </div>
-              )}
-              <div className="p-3">
-                <p className="truncate text-sm font-medium">{g.prompt}</p>
-                <div className="mt-1 flex items-center justify-between">
-                  <span className="text-xs text-white/30">{g.modelId}</span>
-                  <span className="text-xs text-white/30">{g.credits} cr</span>
+                )}
+                <div className="p-3">
+                  <p className="truncate text-sm font-medium">{g.prompt}</p>
+                  <div className="mt-1 flex items-center justify-between">
+                    <span className="text-xs text-white/30">{g.modelId}</span>
+                    <span className="text-xs text-white/30">{g.credits} cr</span>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

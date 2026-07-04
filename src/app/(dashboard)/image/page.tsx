@@ -3,7 +3,8 @@
 import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { IMAGE_MODELS, type ImageModelKey } from "@/lib/fal";
+import { IMAGE_MODELS } from "@/lib/models";
+import { useGenerationJob } from "@/hooks/useGenerationJob";
 import { cn } from "@/lib/utils";
 
 const ASPECT_RATIOS = [
@@ -15,40 +16,24 @@ const ASPECT_RATIOS = [
 ];
 
 export default function ImagePage() {
-  const [model, setModel] = useState<ImageModelKey>("flux-kontext-max");
+  const [model, setModel] = useState(IMAGE_MODELS[0].key);
   const [prompt, setPrompt] = useState("");
   const [negativePrompt, setNegativePrompt] = useState("");
   const [aspectRatio, setAspectRatio] = useState(ASPECT_RATIOS[0]);
-  const [loading, setLoading] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const { status, outputUrl, error, start } = useGenerationJob();
 
-  async function handleGenerate() {
+  const selected = IMAGE_MODELS.find((m) => m.key === model)!;
+  const isLoading = status === "submitting" || status === "processing";
+
+  function handleGenerate() {
     if (!prompt.trim()) return;
-    setLoading(true);
-    setError(null);
-    setResult(null);
-
-    try {
-      const res = await fetch("/api/generate/image", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          modelId: model,
-          prompt,
-          negativePrompt: negativePrompt || undefined,
-          width: aspectRatio.w,
-          height: aspectRatio.h,
-        }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error);
-      setResult(data.url);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Generation failed");
-    } finally {
-      setLoading(false);
-    }
+    start("/api/generate/image", {
+      modelId: model,
+      prompt,
+      negativePrompt: negativePrompt || undefined,
+      width: aspectRatio.w,
+      height: aspectRatio.h,
+    });
   }
 
   return (
@@ -60,32 +45,33 @@ export default function ImagePage() {
         <div className="flex flex-col gap-4">
           {/* Model selector */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-white/60">Model</label>
+            <span className="mb-2 block text-sm font-medium text-white/60">Model</span>
             <div className="grid grid-cols-3 gap-2">
-              {(Object.entries(IMAGE_MODELS) as [ImageModelKey, typeof IMAGE_MODELS[ImageModelKey]][]).map(
-                ([key, m]) => (
-                  <button
-                    key={key}
-                    onClick={() => setModel(key)}
-                    className={cn(
-                      "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
-                      model === key
-                        ? "border-white bg-white/10 text-white"
-                        : "border-white/10 text-white/50 hover:border-white/30 hover:text-white"
-                    )}
-                  >
-                    <p className="font-medium leading-tight">{m.label}</p>
-                    <p className="text-xs text-white/40">{m.credits} cr</p>
-                  </button>
-                )
-              )}
+              {IMAGE_MODELS.map((m) => (
+                <button
+                  key={m.key}
+                  onClick={() => setModel(m.key)}
+                  className={cn(
+                    "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                    model === m.key
+                      ? "border-white bg-white/10 text-white"
+                      : "border-white/10 text-white/50 hover:border-white/30 hover:text-white"
+                  )}
+                >
+                  <p className="font-medium leading-tight">{m.label}</p>
+                  <p className="text-xs text-white/40">{m.credits} cr</p>
+                </button>
+              ))}
             </div>
           </div>
 
           {/* Prompt */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-white/60">Prompt</label>
+            <label htmlFor="prompt" className="mb-2 block text-sm font-medium text-white/60">
+              Prompt
+            </label>
             <textarea
+              id="prompt"
               value={prompt}
               onChange={(e) => setPrompt(e.target.value)}
               placeholder="Describe what you want to generate..."
@@ -96,11 +82,11 @@ export default function ImagePage() {
 
           {/* Negative prompt */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-white/60">
-              Negative prompt{" "}
-              <span className="text-white/30">(optional)</span>
+            <label htmlFor="negative-prompt" className="mb-2 block text-sm font-medium text-white/60">
+              Negative prompt <span className="text-white/30">(optional)</span>
             </label>
             <textarea
+              id="negative-prompt"
               value={negativePrompt}
               onChange={(e) => setNegativePrompt(e.target.value)}
               placeholder="What to avoid..."
@@ -111,7 +97,7 @@ export default function ImagePage() {
 
           {/* Aspect ratio */}
           <div>
-            <label className="mb-2 block text-sm font-medium text-white/60">Aspect ratio</label>
+            <span className="mb-2 block text-sm font-medium text-white/60">Aspect ratio</span>
             <div className="flex gap-2">
               {ASPECT_RATIOS.map((ar) => (
                 <button
@@ -130,13 +116,8 @@ export default function ImagePage() {
             </div>
           </div>
 
-          <Button
-            onClick={handleGenerate}
-            disabled={loading || !prompt.trim()}
-            size="lg"
-            className="mt-2"
-          >
-            {loading ? "Generating..." : `Generate · ${IMAGE_MODELS[model].credits} credits`}
+          <Button onClick={handleGenerate} disabled={isLoading || !prompt.trim()} size="lg" className="mt-2">
+            {isLoading ? "Generating..." : `Generate · ${selected.credits} credits`}
           </Button>
 
           {error && (
@@ -148,15 +129,15 @@ export default function ImagePage() {
 
         {/* Result */}
         <div className="flex items-center justify-center rounded-xl border border-white/10 bg-white/5 min-h-64">
-          {loading ? (
+          {isLoading ? (
             <div className="text-center text-white/30">
               <div className="mx-auto mb-3 h-8 w-8 animate-spin rounded-full border-2 border-white/20 border-t-white" />
               <p className="text-sm">Generating image...</p>
             </div>
-          ) : result ? (
+          ) : status === "done" && outputUrl ? (
             <div className="relative w-full overflow-hidden rounded-xl">
               <Image
-                src={result}
+                src={outputUrl}
                 alt="Generated image"
                 width={aspectRatio.w}
                 height={aspectRatio.h}
@@ -164,12 +145,7 @@ export default function ImagePage() {
                 unoptimized
               />
               <div className="absolute bottom-3 right-3">
-                <a
-                  href={result}
-                  download="generation.jpg"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
+                <a href={`/api/download?url=${encodeURIComponent(outputUrl)}`}>
                   <Button size="sm" variant="outline">
                     Download
                   </Button>
