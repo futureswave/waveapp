@@ -17,6 +17,14 @@ export const PLAN_CREDITS: Record<string, number> = {
   studio: 1000,
 };
 
+// Approximate monthly USD price per plan, used only for admin MRR estimates.
+export const PLAN_MONTHLY_PRICE: Record<string, number> = {
+  FREE: 0,
+  STARTER: 12,
+  PRO: 29,
+  STUDIO: 79,
+};
+
 export const PRICE_TO_PLAN: Record<string, keyof typeof PLAN_CREDITS> = {
   [process.env.STRIPE_STARTER_PRICE_ID ?? ""]: "starter",
   [process.env.STRIPE_PRO_PRICE_ID ?? ""]: "pro",

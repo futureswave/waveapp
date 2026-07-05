@@ -3,7 +3,14 @@ import { getModel, isModelKind, IMAGE_MODELS, VIDEO_MODELS, MODELS } from "../mo
 import { modelCredits } from "../credits";
 import { extractOutputUrl, buildFalInput } from "../fal";
 import { getMotionPreset, motionPromptPrefix } from "../motion";
-import { imageGenerateSchema, videoGenerateSchema, checkoutSchema } from "../validation";
+import {
+  imageGenerateSchema,
+  videoGenerateSchema,
+  checkoutSchema,
+  adminCreditsSchema,
+  adminPlanSchema,
+  adminRoleSchema,
+} from "../validation";
 
 describe("model registry", () => {
   it("resolves known models and rejects unknown", () => {
@@ -70,5 +77,22 @@ describe("validation schemas", () => {
   it("restricts checkout plans", () => {
     expect(checkoutSchema.safeParse({ plan: "pro" }).success).toBe(true);
     expect(checkoutSchema.safeParse({ plan: "enterprise" }).success).toBe(false);
+  });
+});
+
+describe("admin validation schemas", () => {
+  it("credits: non-zero, bounded amount", () => {
+    expect(adminCreditsSchema.safeParse({ userId: "u1", amount: 50 }).success).toBe(true);
+    expect(adminCreditsSchema.safeParse({ userId: "u1", amount: -50, reason: "refund" }).success).toBe(true);
+    expect(adminCreditsSchema.safeParse({ userId: "u1", amount: 0 }).success).toBe(false);
+    expect(adminCreditsSchema.safeParse({ userId: "u1", amount: 2_000_000 }).success).toBe(false);
+    expect(adminCreditsSchema.safeParse({ userId: "", amount: 5 }).success).toBe(false);
+  });
+
+  it("plan and role are enum-restricted", () => {
+    expect(adminPlanSchema.safeParse({ userId: "u1", plan: "PRO" }).success).toBe(true);
+    expect(adminPlanSchema.safeParse({ userId: "u1", plan: "pro" }).success).toBe(false);
+    expect(adminRoleSchema.safeParse({ userId: "u1", role: "ADMIN" }).success).toBe(true);
+    expect(adminRoleSchema.safeParse({ userId: "u1", role: "SUPER" }).success).toBe(false);
   });
 });

@@ -62,6 +62,18 @@ function CreditBadge() {
 export function Navbar() {
   const pathname = usePathname();
   const { isSignedIn } = useUser();
+  const [isAdmin, setIsAdmin] = useState(false);
+
+  useEffect(() => {
+    if (!isSignedIn) {
+      setIsAdmin(false);
+      return;
+    }
+    fetch("/api/user/credits")
+      .then((r) => r.json())
+      .then((d) => setIsAdmin(d.role === "ADMIN"))
+      .catch(() => {});
+  }, [isSignedIn]);
 
   return (
     <header className="fixed top-0 z-50 w-full border-b border-white/[0.06] bg-[#0a0a0a]/90 backdrop-blur-md">
@@ -117,6 +129,14 @@ export function Navbar() {
         </nav>
 
         <div className="ml-auto flex items-center gap-2.5">
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className="rounded-sm border border-[var(--accent)]/40 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10"
+            >
+              Admin
+            </Link>
+          )}
           <CreditBadge />
           {isSignedIn ? (
             <UserButton />

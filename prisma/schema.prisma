@@ -13,6 +13,7 @@ model User {
   email        String        @unique
   credits      Int           @default(100)
   plan         Plan          @default(FREE)
+  role         Role          @default(USER)
   createdAt    DateTime      @default(now())
   updatedAt    DateTime      @updatedAt
   generations  Generation[]
@@ -22,7 +23,7 @@ model User {
 model Generation {
   id                String   @id @default(cuid())
   userId            String
-  user              User     @relation(fields: [userId], references: [id])
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   modelId           String
   prompt            String
   outputUrl         String?
@@ -49,7 +50,7 @@ model ProcessedWebhookEvent {
 model Subscription {
   id               String   @id @default(cuid())
   userId           String   @unique
-  user             User     @relation(fields: [userId], references: [id])
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   stripeCustomerId String   @unique
   stripePriceId    String
   stripeSubId      String   @unique
@@ -57,6 +58,25 @@ model Subscription {
   currentPeriodEnd DateTime
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
+}
+
+// Admin action audit trail. A row is written for every privileged mutation
+// (credit adjustment, plan/role change) performed via the admin panel.
+model AdminActionLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  action    String // CREDIT_ADJUST | PLAN_CHANGE | ROLE_CHANGE
+  targetId  String // affected userId
+  detail    Json?
+  createdAt DateTime @default(now())
+
+  @@index([adminId])
+  @@index([targetId])
+}
+
+enum Role {
+  USER
+  ADMIN
 }
 
 enum Plan {

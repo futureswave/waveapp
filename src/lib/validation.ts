@@ -22,3 +22,23 @@ export const videoGenerateSchema = z.object({
 export const checkoutSchema = z.object({
   plan: z.enum(["starter", "pro", "studio"]),
 });
+
+// ---- Admin ----
+export const adminCreditsSchema = z.object({
+  userId: z.string().min(1),
+  // Positive to grant, negative to revoke. Bounded to avoid fat-finger mistakes.
+  amount: z.number().int().refine((n) => n !== 0 && Math.abs(n) <= 1_000_000, {
+    message: "Amount must be non-zero and within ±1,000,000",
+  }),
+  reason: z.string().trim().max(500).optional(),
+});
+
+export const adminPlanSchema = z.object({
+  userId: z.string().min(1),
+  plan: z.enum(["FREE", "STARTER", "PRO", "STUDIO"]),
+});
+
+export const adminRoleSchema = z.object({
+  userId: z.string().min(1),
+  role: z.enum(["USER", "ADMIN"]),
+});
